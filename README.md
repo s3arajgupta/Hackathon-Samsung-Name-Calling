@@ -21,12 +21,14 @@ Dealing with raw audio representations and metric learning was an exciting new c
 
 ## Problem Statement
 
-When listening to music or multimedia using headphones, users often miss someone calling their name due to passive noise isolation or high playback volume. 
+When listening to music or multimedia using headphones, users often miss someone calling their name due to passive noise isolation or high playback volume.
 
 **The Challenge:** Build an intelligent, on-device mobile detection system that senses when the user's name is being spoken in their environment. Upon detection, the device can automatically duck media volume or trigger haptic feedback so the user can respond.
 
 ### The Zero-ASR Constraint
+
 A core rule of the challenge was **Zero Automatic Speech Recognition (ASR)**:
+
 - **No Speech-to-Text (STT) conversion** was permitted.
 - Large pre-trained acoustic or language models (such as DeepSpeech, Kaldi, or Whisper) were strictly prohibited.
 - **Why this constraint?**
@@ -85,6 +87,7 @@ To solve the name-calling detection problem under the Zero-ASR constraint, we de
 ```
 
 ### Pipeline Overview
+
 1. **Audio Standardization:** Audio signals are sampled at $16\text{ kHz}$ mono. Inputs are trimmed or zero-padded to a fixed 1.0-second window ($16,000$ samples).
 2. **Mel-Spectrogram Extraction:** We extract a 128-band Mel-frequency spectrogram via Short-Time Fourier Transform (STFT), capturing the fundamental acoustic and phonetic timbre of spoken names.
 3. **Data Normalization:** Spectrogram power intensities are scaled between $[0, 1]$ via min-max normalization, producing 2D acoustic images of dimension $(128 \times 32 \times 1)$.
@@ -98,12 +101,16 @@ To solve the name-calling detection problem under the Zero-ASR constraint, we de
 ## Dataset
 
 ### Dataset Specifications
+
 The complete dataset contains **1,260 audio WAV recordings** divided into training and testing partitions:
+
 - **`train_wav/`**: $1,000$ audio files across 20 distinct name classes ($50$ recordings per name variation).
 - **`test_wav/`**: $260$ audio files across 20 distinct name classes ($13$ recordings per name variation).
 
 ### 20 Name Classes
+
 The dataset encompasses 20 phonetically diverse name variations recorded across multiple speakers and environments:
+
 ```
 abhishek    anmol       anurag      deewanshu   himanshu
 kishan      mayank      narender    neeraj      prince
@@ -112,6 +119,7 @@ siddharth   sourav      swaraj      utkarsh     vikrant
 ```
 
 ### Collection & Recording Strategy
+
 1. **Recording Protocol:** Audio samples were recorded using mobile smartphone microphones across varied room acoustics and ambient noise levels.
 2. **Duration & Format:** Each audio file captures a single isolated name utterance with an average duration of $\le 1.0\text{ second}$, exported in uncompressed 16-bit PCM WAV format.
 3. **File Naming Convention:** Structured as `<name><3-digit-id>.wav` (e.g., `abhishek001.wav`, `swaraj012.wav`, `mayank076.wav`).
@@ -179,19 +187,20 @@ graph TD
 ```
 
 ### Base CNN Layer Specification
+
 The base subnetwork was deliberately engineered to be ultra-compact (only **24,468 total parameters**) to enable instant mobile edge execution:
 
 | Layer | Type | Output Shape | Activation | Regularization | Param # |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `input` | InputLayer | `(None, 128, 32, 1)` | — | — | 0 |
 | `conv2d_1` | Conv2D | `(None, 124, 28, 4)` | `tanh` | Kernel: `(5, 5)` | 104 |
-| `avg_pool_1`| AveragePooling2D | `(None, 62, 14, 4)` | — | Pool: `(2, 2)` | 0 |
+| `avg_pool_1` | AveragePooling2D | `(None, 62, 14, 4)` | — | Pool: `(2, 2)` | 0 |
 | `dropout_1` | Dropout | `(None, 62, 14, 4)` | — | Rate: `0.85` | 0 |
 | `conv2d_2` | Conv2D | `(None, 58, 10, 8)` | `tanh` | Kernel: `(5, 5)` | 808 |
-| `avg_pool_2`| AveragePooling2D | `(None, 29, 5, 8)` | — | Pool: `(2, 2)` | 0 |
+| `avg_pool_2` | AveragePooling2D | `(None, 29, 5, 8)` | — | Pool: `(2, 2)` | 0 |
 | `dropout_2` | Dropout | `(None, 29, 5, 8)` | — | Rate: `0.35` | 0 |
 | `flatten` | Flatten | `(None, 1160)` | — | — | 0 |
-| `dense_1` | Dense | `(None, 20)` | `tanh` | L2 Penalty (`0.001`)| 23,220 |
+| `dense_1` | Dense | `(None, 20)` | `tanh` | L2 Penalty (`0.001`) | 23,220 |
 | `dense_2` | Dense (Embedding) | `(None, 16)` | `sigmoid` | — | 336 |
 
 - **Total Parameters:** 24,468 (95.5 KB)
@@ -199,9 +208,11 @@ The base subnetwork was deliberately engineered to be ultra-compact (only **24,4
 - **Non-trainable Parameters:** 0
 
 ### Loss Function: Contrastive Loss
+
 The Siamese network optimizes the **Contrastive Loss** function defined as:
 $$\mathcal{L}(Y, d) = \frac{1}{2} Y d^2 + \frac{1}{2} (1 - Y) \max(0, m - d)^2$$
 Where:
+
 - $Y = 1$ for positive pairs (same name) and $Y = 0$ for negative pairs (different names).
 - $d = \|\mathbf{x}_1 - \mathbf{x}_2\|_2$ is the Euclidean distance between embedding vectors.
 - $m = 1.0$ is the contrastive margin enforcing separation between distinct names.
@@ -220,6 +231,7 @@ The model was trained for 150 epochs using the Adam optimizer with a batch size 
 </p>
 
 ### Final Evaluation Metrics
+
 Evaluated on the held-out validation pairs:
 
 | Evaluation Metric | Training Set | Validation Set |
@@ -267,12 +279,15 @@ Name-Calling-SAMSUNG/
 ## Getting Started & Usage
 
 ### 1. Environment Setup
+
 Install the necessary audio signal processing and machine learning dependencies:
+
 ```bash
 pip install tensorflow librosa numpy scikit-learn opencv-python matplotlib
 ```
 
 ### 2. Testing Your Golden Dataset
+
 The evaluation script accepts an input text file specifying audio pairs and generates predictions (`1` for match, `0` for distractor):
 
 ```bash
@@ -281,35 +296,44 @@ python test_golden_dataset.py --model ../model --input textinput.txt --output tx
 ```
 
 **CLI Arguments:**
+
 - `--model`: Path to the trained SavedModel directory (defaults to `../model`).
 - `--input`: Path to the input test pairs file (defaults to `textinput.txt`).
 - `--output`: Path where predictions should be saved (defaults to `txtoutput.txt`).
 - `--threshold`: Euclidean distance cutoff for a match (default: `0.5`).
 
 **Format of `textinput.txt`:**
+
 ```
 #1    /path/to/abhishek011.wav    /path/to/abhishek012.wav
 #2    /path/to/anurag011.wav      /path/to/shiv008.wav
 ```
 
 **Format of `txtoutput.txt`:**
+
 ```
 #1    1
 #2    0
 ```
 
 ### 3. Model Training & Validation
+
 To train the Siamese model from scratch:
+
 1. Extract the RAR archives in `Dataset/`:
+
    ```bash
    # Extract train_wav_1.rar and train_wav_2.rar into Dataset/train_wav/
    # Extract test_wav.rar into Dataset/test_wav/
    ```
+
 2. Run the training script:
+
    ```bash
    cd Script_training_validation
    python Training_validation.py
    ```
+
 3. Alternatively, open and execute `Training_validation.ipynb` directly in Google Colab (GPU accelerated).
 
 ---
@@ -317,6 +341,7 @@ To train the Siamese model from scratch:
 ## Android Application Demo
 
 An Android application named **Congruent.apk** is included in the root directory:
+
 - **Minimum Requirement:** Android Oreo (API level 26) or higher.
 - **Workflow:**
   1. Record a 1.0-second **Reference Audio** (the enrolled name).
