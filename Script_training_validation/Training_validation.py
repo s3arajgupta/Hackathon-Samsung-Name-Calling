@@ -14,13 +14,17 @@ Original file is located at
             Mayank Goyal (goyalmayank522@gmail.com)
 """
 
-from google.colab import drive
-drive.mount('/content/drive')
+try:
+    from google.colab import drive
+    drive.mount('/content/drive')
+except (ImportError, Exception):
+    pass
 
 """#**Importing Required Libraries/Dependencies**"""
 
 # Commented out IPython magic to ensure Python compatibility.
 import os
+import sys
 import librosa
 import librosa.display
 import pandas as pd
@@ -31,7 +35,12 @@ import skimage.io
 import sklearn
 
 import cv2
-from google.colab.patches import cv2_imshow
+try:
+    from google.colab.patches import cv2_imshow
+except (ImportError, Exception):
+    def cv2_imshow(img):
+        cv2.imshow("Image", img)
+        cv2.waitKey(0)
 
 import tensorflow as tf
 from keras import backend as K
@@ -44,15 +53,29 @@ from keras.optimizers import Adam
 
 """#**Path to the train and test wav**
 
-* The dataset used for training and testing purpose is taken from google drive.
+* The dataset used for training and testing purpose is taken from google drive or local dataset folder.
 * The train_wav folder consists of 1000 wav files for training.
 * The test_wav folder consists of 260 wav files for testing.
 * The dataset consists of 20 different name variations. 
 * Length of each audio file is <= 1sec and stored in wav format.
 """
 
-path_to_train_wav='/content/drive/MyDrive/prism_dataset/train_wav'
-path_to_test_wav='/content/drive/MyDrive/prism_dataset/test_wav'
+def resolve_dataset_dir(dir_name, colab_default):
+    script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else '.'
+    candidates = [
+        os.path.join(script_dir, '..', 'Dataset', dir_name),
+        os.path.join('Dataset', dir_name),
+        os.path.join('..', 'Dataset', dir_name),
+        dir_name,
+        colab_default
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return os.path.abspath(c)
+    return colab_default
+
+path_to_train_wav = resolve_dataset_dir('train_wav', '/content/drive/MyDrive/prism_dataset/train_wav')
+path_to_test_wav = resolve_dataset_dir('test_wav', '/content/drive/MyDrive/prism_dataset/test_wav')
 
 """#**Defining Class Labels & other Variables**
 
@@ -89,6 +112,17 @@ def scale_minmax(X, min=0.0, max=1.0):
 * Scaling the mel-scaled spectrogram between 0-1.
 * Finally, data array and label array are created for training and testing data.
 """
+
+# Check if dataset paths exist
+if not os.path.exists(path_to_train_wav) or not os.path.exists(path_to_test_wav):
+    print("=" * 70)
+    print("Notice: Dataset audio directories not found:")
+    print(f"  - Train path: {path_to_train_wav}")
+    print(f"  - Test path : {path_to_test_wav}")
+    print("\nTo train the model from scratch, please extract the .rar archives")
+    print("located in 'Dataset/' into 'Dataset/train_wav' and 'Dataset/test_wav'.")
+    print("=" * 70)
+    sys.exit(0)
 
 # Creating data and label for training
 for filename in os.listdir(path_to_train_wav):
@@ -330,8 +364,9 @@ plt.show()
 
 """##**Saving the Model**"""
 
-model.save('/content/drive/MyDrive/prism_model/model_congruent',save_format='H5')
-model = keras.models.load_model('/content/drive/MyDrive/prism_model/model_congruent', compile=False)
+save_path = '/content/drive/MyDrive/prism_model/model_congruent' if os.path.exists('/content/drive/MyDrive') else os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'model_congruent')
+model.save(save_path)
+model = keras.models.load_model(save_path, compile=False)
 model.summary()
 
 # compute final accuracy on training and test sets
